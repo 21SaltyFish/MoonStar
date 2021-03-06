@@ -1,0 +1,126 @@
+from torch.utils.data import DataLoader,Dataset
+from skimage import io,transform
+import matplotlib.pyplot as plt
+import os
+import torch
+import numpy as np
+from torch import tensor
+import torch.nn as nn
+from torch.nn import init
+import torch.optim as optim
+import sys
+
+torch.set_default_tensor_type(torch.DoubleTensor)
+
+class mydataset(Dataset):
+    def __init__(self,dir,transform=None):
+        self.dir = dir
+        self.transform = transform
+        self.images = os.listdir(self.dir)
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, index):
+        image_index  = self.images[index]
+        img_path = os.path.join(self.dir,image_index)
+        img = np.load(img_path)
+        img = img.reshape(1,256*256)
+        label = int(img_path.split('_')[0][-1])
+
+        return img,label
+
+
+def draw(list,str):
+    x= range(1,11)
+    y=list
+    plt.plot(x,y,linestyle='--')
+    plt.title(str)
+    plt.show()
+
+## 线性网络
+
+if __name__ == '__main__':
+    ### 网络结构的一些参数
+    num_feature = 256*256
+    num_hidden = 256
+    num_out = 1
+    num_epochs = 10
+    drop_p = 0.0
+
+    loss_list= []
+    train_acc_list = []
+    test_acc_list = []
+
+    ### 加载训练数据集
+    data = mydataset('./trainset')
+    dataloader = DataLoader(data,batch_size=128,shuffle=True)
+
+    ### 加载测试数据集
+    test_data = mydataset('./testset')
+    test_dataloader = DataLoader(test_data,batch_size=128,shuffle=True)
+
+    ### 构建线性网络结构
+    net = nn.Sequential(
+        nn.Linear(num_feature,num_hidden),
+        nn.Sigmoid(),
+        #nn.Dropout(drop_p),
+        nn.Linear(num_hidden,num_out),
+
+    )
+    for params in net.parameters():
+        init.normal_(params,mean=0,std=0.1)
+
+    optimizer = optim.SGD(net.parameters(),lr=0.01)
+    loss_fun = nn.MSELoss()
+
+    '''
+    for params int net.parameters():
+        init.
+    '''
+
+
+
+    ###训练-测试过程
+    for epoch in range(1,num_epochs+1):
+        train_l_sum,train_acc_sum,test_acc_sum,n=0.0,0.0,0,0.0
+        for data,label in dataloader:
+
+            data = data.double()
+            label = label.double()
+
+            y_hat = net(data)
+
+            loss = loss_fun(y_hat.view(-1,1),label.view(-1,1))
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            train_l_sum+=loss.item()
+            train_acc_sum+=(y_hat.round().reshape(label.shape)==label).sum().item()
+            n+= label.shape[0]
+        ###测试模块
+        for test_data,test_label in test_dataloader:
+             net.double()
+             predict_y = net(test_data.double())
+             test_acc_sum += (predict_y.round().reshape(test_label.shape)==test_label).sum().item()
+
+        print('epoch %d ,loss : %.5f,train_acc=%.5f,test_acc=%.5f' % (epoch, loss.item(), train_acc_sum / n, test_acc_sum / n))
+        loss_list.append(loss.item())
+        train_acc_list.append(100*train_acc_sum/n)
+        test_acc_list.append(100*test_acc_sum/n)
+
+#draw(loss_list,'loss-value')
+draw(train_acc_list,'Train-accuracy')
+draw(test_acc_list,'Test-accuracy')
+    
+
+
+
+
+
+
+
+
+
+
